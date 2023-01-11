@@ -44,6 +44,47 @@ Definition substl defs body : term :=
   fold_left (fun bod term => csubst term 0 bod)
     defs body.
 
+Lemma substl_tBot defs : substl defs tBox = tBox.
+Proof. by elim: defs. Qed.
+
+Lemma substl_tLambda defs na M :
+  substl defs (tLambda na M) =
+    tLambda na (fold_left (fun bod term => csubst term 1 bod) defs M).
+Proof. by elim: defs M => //=. Qed.
+
+Lemma substl_tApp defs u v :
+  substl defs (tApp u v) = tApp (substl defs u) (substl defs v).
+Proof. by elim: defs u v => //=. Qed.
+
+Lemma lift_csubstK t k u : csubst t k (lift 1 k u) = u.
+Proof.
+elim/term_forall_list_ind: u k => //=.
+- move=> n k; case: Nat.leb_spec => ? /=; case: Nat.compare_spec => ? //=; lia.
+- move=> n l IHl k; congr tEvar.
+  by elim/All_ind: l / IHl => //= u l -> _ ->.
+- by move=> n u IHu k; rewrite IHu.
+- by move=> n u1 IHu1 u2 IHu2 k; rewrite IHu1 IHu2.
+- by move=> u1 u2 IHu1 IHu2 k; rewrite IHu1 IHu2.
+- move=> i n args IHargs k; congr tConstruct.
+  by elim/All_ind: args / IHargs => //= a args -> _ ->.
+- move=> p u IHu l IHl k; rewrite IHu; congr tCase.
+  by elim/All_ind: l / IHl => //= -[? ?] l -> _ ->.
+- by move=> s u IHu k; rewrite IHu.
+- move=> m n IHm k; congr tFix; rewrite map_length /map_def.
+  elim/All_ind: m / IHm k => [|[dname dbody rarg] l] //= Hdbody _ Hl k.
+  by rewrite -Nat.add_succ_r Hdbody Hl.
+- move=> m n IHm k; congr tCoFix; rewrite map_length /map_def.
+  elim/All_ind: m / IHm k => [|[dname dbody rarg] l] //= Hdbody _ Hl k.
+  by rewrite -Nat.add_succ_r Hdbody Hl.
+Qed.
+
+Lemma lift0_substlK defs defn body :
+  #|defs| = defn -> substl defs (lift0 defn body) = body.
+Proof.
+move=> <-; elim: defs => [|def defs IHdefs] //=; first by rewrite lift0_p.
+by rewrite simpl_lift0 lift_csubstK IHdefs.
+Qed.
+
 (** It is equivalent to general substitution on closed terms. *)
 Lemma closed_subst t k u : closed t ->
     csubst t k u = subst [t] k u.

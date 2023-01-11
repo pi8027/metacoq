@@ -66,6 +66,12 @@ Definition isLambda t :=
   | _ => false
   end.
 
+Definition isCase t :=
+  match t with
+  | tCase _ _ _ => true
+  | _ => false
+  end.
+
 (** ** Entries
 
   The kernel accepts these inputs and typechecks them to produce
