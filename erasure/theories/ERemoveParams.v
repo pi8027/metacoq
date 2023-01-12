@@ -66,7 +66,7 @@ Section strip.
     | tBox => EAst.tBox
     | tVar n => EAst.tVar n
     | tConst n => EAst.tConst n
-    | tConstruct ind i block_args => EAst.tConstruct ind i block_args
+    | tConstruct ind i block_args => EAst.tConstruct ind i (map_InP block_args (fun d H => strip d))
     | tPrim p => EAst.tPrim p }.
   Proof.
     all:try lia.
@@ -82,9 +82,11 @@ Section strip.
       eapply (In_size id size) in H. unfold id in H. change (fun x => size x) with size in H. lia.
     - rewrite size_mkApps. destruct v; try congruence.
       cbn. lia.
+    - by eapply (In_size id size) in H.
     - eapply (In_size snd size) in H.
       cbn in *. lia.
   Qed.
+  Print strip_graph.
   End Def.
 
   Hint Rewrite @map_InP_spec : strip.
@@ -172,6 +174,23 @@ Section strip.
 (*     rewrite /lookup_constructor /lookup_inductive. destruct lookup_minductive => //. *)
 (*     cbn. do 2 destruct nth_error => //. congruence. *)
 (*   Qed. *)
+
+  Lemma strip_csubst a k b :
+    strip (ECSubst.csubst a k b) = ECSubst.csubst (strip a) k (strip b).
+  Proof using Type.
+    move: k; funelim (strip b) => //= k;
+      simp strip; rewrite -?strip_equation_1 /=;
+      try by f_equal; rewrite // !map_map 1?map_length;
+             apply/map_ext_in => ? /H ->.
+    - by destruct Nat.compare.
+    - rewrite csubst_mkApps strip_mkApps //= !map_InP_spec !map_map.
+      congr tCase => //=; apply/map_ext_in => ? /H0 ->.
+      rewrite csubst_mkApps !map_map.
+      congr (_, mkApps _ _); apply/map_ext_in => ? /H -> //.
+      admit.
+    - rewrite !csubst_mkApps -H0.
+      admit.
+  Abort.
 
 (*   Lemma strip_csubst a k b : *)
 (*     closed a -> *)
@@ -833,9 +852,10 @@ Proof.
   intros clΣ wfΣ ev.
   revert t v ev.
   unshelve eapply (eval_mkApps_rect wfl Σ (fun x y => eval (strip_env Σ) (strip Σ x) (strip Σ y))).
-  all:simp_strip; simpl; intros.
+  all:intros; simpl in *.
   (* 1-15: try solve [econstructor; eauto]. *)
   all:repeat destruct_nary_times => //.
+
   - rewrite strip_tApp.
     destruct (decompose_app a) as [hd args] eqn:da.
     have hd_isnt_app: ~~ isApp hd by exact: decompose_app_notApp da.
@@ -843,22 +863,30 @@ Proof.
     rewrite decompose_app_mkApps // strip_mkApps //.
     destruct case_viewc; last by move/eval_box/(_ H2).
     rewrite /= !map_InP_spec !map_app /=.
-    move=> {a ev H0 da hd_isnt_app} H; inversion_clear H; try congruence.
-    + case: br H5 H7 H8 => /= br1 br2 H5 H7 H8.
+    move=> {a ev H0 da hd_isnt_app} H; depelim H; try congruence.
+    + case: br e1 e3 H0 => /= br1 br2 e1 e3 H0.
       apply: eval_iota (br1, tApp br2 (lift0 #|br1| (strip Σ t)))
-               _ H0 H3 H4 _ H6 (H7) _.
-      * move: H5; rewrite !nth_error_map.
+               _ e H e0 _ e2 (e3) _.
+      * move: e1; rewrite !nth_error_map.
         case: nth_error => [[br1' br2']|] //= [<- <-].
         by rewrite map_app /= mkApps_app.
       * rewrite /iota_red substl_tApp lift0_substlK ?List.rev_length //.
-        exact/eval_box/H2/H8.
-    + case: brs H5 H6 => [|[n' f'][]] //= [<- <-] {n f} H6.
-      apply: eval_iota_sing H0 H3 H4 eq_refl _.
+        apply/eval_box/H2/H0.
+    + case: brs e0 H0 => [|[n' f'][]] //= [<- <-] {n f} H0.
+      apply: eval_iota_sing i H e eq_refl _.
       rewrite map_app mkApps_app /= substl_tApp lift0_substlK ?repeat_length //.
-      exact/eval_box/H2/H6.
-    + admit.
+      apply/eval_box/H2/H0.
+    + admit. (* TODO: cofix *)
 
-  - admit.
+  - rewrite strip_tApp.
+    destruct (decompose_app f0) as [hd args] eqn:da.
+    have hd_isnt_app: ~~ isApp hd by exact: decompose_app_notApp da.
+    move: H; rewrite (decompose_app_inv da) -/(mkApps _ [_]) -mkApps_app.
+    rewrite decompose_app_mkApps // strip_mkApps //.
+    destruct case_viewc.
+    + admit.
+    + simp_strip => H. apply: eval_beta H H2 _.
+      admit.
 
   - rewrite strip_tApp //.
     econstructor; eauto.
